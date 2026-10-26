@@ -169,7 +169,7 @@ def submit(request, course_id):
 
     return HttpResponseRedirect(
         reverse(
-            'onlinecourse:exam_result',
+            'onlinecourse:show_exam_result',
             args=(course.id, submission.id)
         )
     )
