@@ -14,7 +14,7 @@ from django.conf import settings
 class Instructor(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
     )
     full_time = models.BooleanField(default=True)
     total_learners = models.IntegerField()
@@ -24,11 +24,6 @@ class Instructor(models.Model):
 
 
 class Learner(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
-    )
-
     STUDENT = 'student'
     DEVELOPER = 'developer'
     DATA_SCIENTIST = 'data_scientist'
@@ -41,10 +36,14 @@ class Learner(models.Model):
         (DATABASE_ADMIN, 'Database Admin'),
     ]
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+    )
     occupation = models.CharField(
         max_length=20,
         choices=OCCUPATION_CHOICES,
-        default=STUDENT
+        default=STUDENT,
     )
     social_link = models.URLField(max_length=200)
 
@@ -54,8 +53,9 @@ class Learner(models.Model):
 
 class Course(models.Model):
     name = models.CharField(
+        null=False,
         max_length=30,
-        default='online course'
+        default='online course',
     )
     image = models.ImageField(upload_to='course_images/')
     description = models.CharField(max_length=1000)
@@ -63,7 +63,7 @@ class Course(models.Model):
     instructors = models.ManyToManyField(Instructor)
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        through='Enrollment'
+        through='Enrollment',
     )
     total_enrollment = models.IntegerField(default=0)
     is_enrolled = False
@@ -95,14 +95,14 @@ class Enrollment(models.Model):
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
     )
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     date_enrolled = models.DateField(default=now)
     mode = models.CharField(
         max_length=5,
         choices=COURSE_MODES,
-        default=AUDIT
+        default=AUDIT,
     )
     rating = models.FloatField(default=5.0)
 
@@ -118,16 +118,12 @@ class Question(models.Model):
     def __str__(self):
         return self.question_text
 
-    def is_get_score(self, selected_ids=None):
+    def is_get_score(self, selected_ids):
         correct_ids = set(
             self.choices.filter(is_correct=True).values_list(
                 'id', flat=True
             )
         )
-
-        if selected_ids is None:
-            return bool(correct_ids)
-
         selected_ids = set(selected_ids)
 
         valid_selected_ids = set(
@@ -143,7 +139,7 @@ class Choice(models.Model):
     question = models.ForeignKey(
         Question,
         on_delete=models.CASCADE,
-        related_name='choices'
+        related_name='choices',
     )
     choice_text = models.CharField(max_length=100)
     is_correct = models.BooleanField(default=False)
@@ -155,9 +151,12 @@ class Choice(models.Model):
 class Submission(models.Model):
     enrollment = models.ForeignKey(
         Enrollment,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
     )
     choices = models.ManyToManyField(Choice)
 
     def __str__(self):
-        return f"Submission: Enrollment ID {self.enrollment_id}"
+        return (
+            f"Submission {self.id} for enrollment "
+            f"{self.enrollment.id}"
+        )

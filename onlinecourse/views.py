@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.views import generic
 from django.contrib.auth.models import User
 from django.contrib.auth import login, logout, authenticate
+
 from .models import Course, Enrollment, Question, Choice, Submission
 
 
@@ -15,7 +16,7 @@ def registration_request(request):
         return render(
             request,
             'onlinecourse/user_registration_bootstrap.html',
-            context
+            context,
         )
 
     if request.method == 'POST':
@@ -29,7 +30,7 @@ def registration_request(request):
             return render(
                 request,
                 'onlinecourse/user_registration_bootstrap.html',
-                context
+                context,
             )
 
         if User.objects.filter(username=username).exists():
@@ -37,14 +38,14 @@ def registration_request(request):
             return render(
                 request,
                 'onlinecourse/user_registration_bootstrap.html',
-                context
+                context,
             )
 
         user = User.objects.create_user(
             username=username,
-            password=password,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            password=password,
         )
         login(request, user)
         return redirect('onlinecourse:index')
@@ -67,7 +68,7 @@ def login_request(request):
     return render(
         request,
         'onlinecourse/user_login_bootstrap.html',
-        context
+        context,
     )
 
 
@@ -80,7 +81,7 @@ def check_if_enrolled(user, course):
     if user.is_authenticated:
         return Enrollment.objects.filter(
             user=user,
-            course=course
+            course=course,
         ).exists()
     return False
 
@@ -95,7 +96,7 @@ class CourseListView(generic.ListView):
         for course in courses:
             course.is_enrolled = check_if_enrolled(
                 self.request.user,
-                course
+                course,
             )
 
         return courses
@@ -109,7 +110,7 @@ class CourseDetailView(generic.DetailView):
         context = super().get_context_data(**kwargs)
         context['is_enrolled'] = check_if_enrolled(
             self.request.user,
-            self.object
+            self.object,
         )
         return context
 
@@ -123,7 +124,7 @@ def enroll(request, course_id):
     enrollment, created = Enrollment.objects.get_or_create(
         user=request.user,
         course=course,
-        defaults={'mode': 'honor'}
+        defaults={'mode': 'honor'},
     )
 
     if created:
@@ -153,23 +154,24 @@ def submit(request, course_id):
         return redirect('onlinecourse:login')
 
     if request.method != 'POST':
-        return redirect('onlinecourse:course_details', pk=course_id)
+        return redirect(
+            'onlinecourse:course_details',
+            pk=course_id,
+        )
 
     course = get_object_or_404(Course, pk=course_id)
-
     enrollment = get_object_or_404(
         Enrollment,
         user=request.user,
-        course=course
+        course=course,
     )
 
     submission = Submission.objects.create(enrollment=enrollment)
 
     selected_ids = extract_answers(request)
-
     selected_choices = Choice.objects.filter(
         id__in=selected_ids,
-        question__course=course
+        question__course=course,
     )
 
     submission.choices.set(selected_choices)
@@ -177,7 +179,7 @@ def submit(request, course_id):
     return redirect(
         'onlinecourse:show_exam_result',
         course_id=course.id,
-        submission_id=submission.id
+        submission_id=submission.id,
     )
 
 
@@ -186,68 +188,65 @@ def show_exam_result(request, course_id, submission_id):
         return redirect('onlinecourse:login')
 
     course = get_object_or_404(Course, pk=course_id)
-
     submission = get_object_or_404(
         Submission,
         pk=submission_id,
         enrollment__course=course,
-        enrollment__user=request.user
+        enrollment__user=request.user,
     )
 
-    selected_choices = submission.choices.all()
+    selected_choices = submission.choices.filter(
+        question__course=course,
+    )
     selected_ids = list(
         selected_choices.values_list('id', flat=True)
     )
 
-    total_score = 0
+    score = 0
     possible = 0
     question_results = []
 
     for question in course.question_set.all():
-        correct_choices = question.choices.filter(is_correct=True)
         question_selected_ids = list(
             selected_choices.filter(
-                question=question
+                question=question,
             ).values_list('id', flat=True)
         )
 
         is_correct = question.is_get_score(question_selected_ids)
-
         possible += question.grade
 
         if is_correct:
-            total_score += question.grade
+            score += question.grade
 
         question_results.append({
             'question': question,
             'selected_choices': selected_choices.filter(
-                question=question
+                question=question,
             ),
-            'correct_choices': correct_choices,
+            'correct_choices': question.choices.filter(
+                is_correct=True,
+            ),
             'is_correct': is_correct,
             'grade': question.grade,
         })
 
-    percentage = (
-        round((total_score / possible) * 100, 2)
-        if possible > 0
-        else 0
-    )
+    grade = round(score / possible * 100, 2) if possible else 0
 
     context = {
         'course': course,
         'submission': submission,
         'choices': selected_choices,
         'selected_ids': selected_ids,
-        'question_results': question_results,
-        'score': total_score,
+        'score': score,
         'possible': possible,
-        'grade': percentage,
-        'is_pass': percentage >= 50,
+        'grade': grade,
+        'is_pass': grade >= 50,
+        'question_results': question_results,
     }
 
     return render(
         request,
         'onlinecourse/exam_result_bootstrap.html',
-        context
+        context,
     )
